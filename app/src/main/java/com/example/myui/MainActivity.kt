@@ -161,7 +161,7 @@ class MainActivity : Activity() {
         root.background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(t.top, t.bottom))
         window.statusBarColor = Color.TRANSPARENT
         window.navigationBarColor = Color.TRANSPARENT
-        var flags = View.SYSTEM_UI_FLAG_LAYOUT_STABLE or View.SYSTEM_UI_FLAG_LAYOUT_FULL_SCREEN or
+        var flags = View.SYSTEM_UI_FLAG_LAYOUT_STABLE or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
             View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
         if (t.lightBar) flags = flags or View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
         window.decorView.systemUiVisibility = flags
@@ -254,6 +254,113 @@ class MainActivity : Activity() {
 
     private fun openHomeSettings() {
         try {
+            startActivity(Intent(Settings.ACTION_HOME_SETTINGS))
+        } catch (e: Exception) {
+            try { startActivity(Intent(Settings.ACTION_SETTINGS)) } catch (e2: Exception) { }
+        }
+    }
+
+    private fun closeDrawer() {
+        drawer?.let { root.removeView(it) }
+        drawer = null
+    }
+
+    private fun openDrawer() {
+        if (drawer != null) return
+        val t = Themes.all[themeIdx]
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(alpha(t.bottom, 0xF2))
+            setPadding(dp(16), barH("status_bar_height") + dp(12), dp(16), barH("navigation_bar_height"))
+        }
+
+        var shown = apps
+        val grid = GridView(this).apply {
+            numColumns = 4
+            verticalSpacing = dp(16)
+            stretchMode = GridView.STRETCH_COLUMN_WIDTH
+            setSelector(android.R.color.transparent)
+        }
+        val adapter = object : BaseAdapter() {
+            override fun getCount() = shown.size
+            override fun getItem(p: Int): Any = shown[p]
+            override fun getItemId(p: Int) = p.toLong()
+            override fun getView(p: Int, cv: View?, parent: ViewGroup?): View {
+                val a = shown[p]
+                val cell = LinearLayout(this@MainActivity).apply {
+                    orientation = LinearLayout.VERTICAL
+                    gravity = Gravity.CENTER_HORIZONTAL
+                    setOnClickListener { launch(a) }
+                    setOnLongClickListener { toggleDock(a.pkg); true }
+                }
+                cell.addView(iconView(a, t, 60, true), LinearLayout.LayoutParams(dp(60), dp(60)))
+                cell.addView(TextView(this@MainActivity).apply {
+                    text = a.label
+                    setTextColor(t.text)
+                    textSize = 12f
+                    maxLines = 1
+                    ellipsize = TextUtils.TruncateAt.END
+                    gravity = Gravity.CENTER
+                    setPadding(0, dp(6), 0, 0)
+                })
+                return cell
+            }
+        }
+        grid.adapter = adapter
+
+        val search = EditText(this).apply {
+            hint = "Ara…"
+            setHintTextColor(alpha(t.text, 0x99))
+            setTextColor(t.text)
+            setSingleLine(true)
+            setPadding(dp(16), dp(10), dp(16), dp(10))
+            background = GradientDrawable().apply { cornerRadius = dp(24).toFloat(); setColor(t.tile) }
+        }
+        search.addTextChangedListener(object : TextWatcher {
+            override fun afterTextChanged(s: Editable?) {
+                val q = s.toString().trim().lowercase()
+                shown = if (q.isEmpty()) apps else apps.filter { it.label.lowercase().contains(q) }
+                adapter.notifyDataSetChanged()
+            }
+            override fun beforeTextChanged(s: CharSequence?, st: Int, c: Int, a: Int) {}
+            override fun onTextChanged(s: CharSequence?, st: Int, b: Int, c: Int) {}
+        })
+
+        val top = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        top.addView(search, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        top.addView(TextView(this).apply {
+            text = "🎨"
+            textSize = 24f
+            setPadding(dp(14), dp(8), dp(8), dp(8))
+            setOnClickListener {
+                themeIdx = (themeIdx + 1) % Themes.all.size
+                prefs.edit().putInt("theme", themeIdx).apply()
+                rebuild()
+                openDrawer()
+            }
+        })
+        top.addView(TextView(this).apply {
+            text = "⚙"
+            textSize = 24f
+            setTextColor(t.text)
+            setPadding(dp(8), dp(8), dp(8), dp(8))
+            setOnClickListener { openHomeSettings() }
+        })
+
+        box.addView(top)
+        box.addView(grid, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
+        ).apply { topMargin = dp(16) })
+
+        box.alpha = 0f
+        root.addView(box, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        box.animate().alpha(1f).setDuration(180).start()
+        drawer = box
+    }
+}   try {
             startActivity(Intent(Settings.ACTION_HOME_SETTINGS))
         } catch (e: Exception) {
             try { startActivity(Intent(Settings.ACTION_SETTINGS)) } catch (e2: Exception) { }
